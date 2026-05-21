@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   AlertTriangle,
@@ -8,6 +8,7 @@ import {
   Factory,
   RefreshCw,
   Sigma,
+  Table2,
 } from "lucide-react";
 
 const FEEDS = [
@@ -37,10 +38,81 @@ function parseValue(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+function excelValue(value) {
+  if (!Number.isFinite(value)) return "";
+  return Number.isInteger(value) ? String(value) : String(value);
+}
+
+function normalizeCode(value) {
+  return value.trim().replace(/\s+/g, " ").toUpperCase();
+}
+
+function parseStaticBrickRows(workbook, spreadsheet) {
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = spreadsheet.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+  const blockStarts = [0, 7, 14];
+  const entries = [];
+
+  for (let rowIndex = 2; rowIndex < rows.length; rowIndex += 1) {
+    for (const start of blockStarts) {
+      const row = rows[rowIndex];
+      const shape = String(row[start] ?? "").trim();
+      const length = Number(row[start + 1]);
+      const height = Number(row[start + 2]);
+      const cold = Number(row[start + 3]);
+      const hot = Number(row[start + 4]);
+      const volume = Number(row[start + 5]);
+
+      if (shape && [length, height, cold, hot].every(Number.isFinite)) {
+        entries.push({
+          id: `${shape}-${rowIndex}-${start}`,
+          shape,
+          length,
+          height,
+          cold,
+          hot,
+          volume: Number.isFinite(volume) ? volume : "",
+        });
+      }
+    }
+  }
+
+  return entries;
+}
+
 export default function EngineeringFeedCalculationSystem() {
   const [feeds, setFeeds] = useState(EMPTY_FEEDS);
   const [submitted, setSubmitted] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [brickRows, setBrickRows] = useState([]);
+  const [sourceWorkbook, setSourceWorkbook] = useState(null);
+  const [spreadsheet, setSpreadsheet] = useState(null);
+  const [excelStatus, setExcelStatus] = useState("Loading static Excel file...");
+  const [selectedA, setSelectedA] = useState("");
+  const [selectedB, setSelectedB] = useState("");
+
+  useEffect(() => {
+    async function loadStaticWorkbook() {
+      try {
+        const xlsxModule = await import("xlsx");
+        const response = await fetch("/iso-vdz.xls");
+        if (!response.ok) throw new Error("Excel file could not be loaded.");
+
+        const buffer = await response.arrayBuffer();
+        const workbook = xlsxModule.read(buffer, { type: "array" });
+        const rows = parseStaticBrickRows(workbook, xlsxModule);
+
+        setSpreadsheet(xlsxModule);
+        setSourceWorkbook(workbook);
+        setBrickRows(rows);
+        setExcelStatus(`${rows.length} brick rows loaded from iso-vdz.xls`);
+      } catch (error) {
+        setExcelStatus(error.message);
+      }
+    }
+
+    loadStaticWorkbook();
+  }, []);
 
   const result = useMemo(() => {
     const values = Object.fromEntries(
@@ -156,6 +228,81 @@ export default function EngineeringFeedCalculationSystem() {
     setFeeds(EMPTY_FEEDS);
     setSubmitted(false);
     setCopied(false);
+    setSelectedA("");
+    setSelectedB("");
+  }
+
+  function applyBrickRow(side, code) {
+    const normalizedCode = normalizeCode(code);
+    const row = brickRows.find(
+      (entry) => normalizeCode(entry.shape) === normalizedCode,
+    );
+
+    if (side === "A") setSelectedA(code);
+    if (side === "B") setSelectedB(code);
+    if (!row) return;
+
+    setFeeds((current) => ({
+      ...current,
+      ...(side === "A"
+        ? {
+            feed1: excelValue(row.hot),
+            feed2: excelValue(row.cold),
+            feed5: excelValue(row.height),
+          }
+        : {
+            feed3: excelValue(row.hot),
+            feed4: excelValue(row.cold),
+            feed5: excelValue(row.height),
+          }),
+    }));
+    setCopied(false);
+  }
+
+  function exportExcelResults() {
+    if (!spreadsheet) {
+      setExcelStatus("Excel tools are still loading. Try again in a moment.");
+      return;
+    }
+
+    const workbook = spreadsheet.utils.book_new();
+
+    if (sourceWorkbook) {
+      for (const sheetName of sourceWorkbook.SheetNames) {
+        workbook.SheetNames.push(sheetName);
+        workbook.Sheets[sheetName] = sourceWorkbook.Sheets[sheetName];
+      }
+    }
+
+    const outputRows = [
+      ["Engineering Feed Calculation Output"],
+      [],
+      ["Input", "Value"],
+      ["HotFaceA", feeds.feed1],
+      ["ColdFaceA", feeds.feed2],
+      ["HotFaceB", feeds.feed3],
+      ["ColdFaceB", feeds.feed4],
+      ["Brick Height", feeds.feed5],
+      ["Big Dia", feeds.feed6],
+      [],
+      ["Calculated Output", "Value"],
+      ["Difference", formatNumber(result.difference)],
+      ["Small Dia", formatNumber(result.smallDia)],
+      ["X", formatNumber(result.x)],
+      ["Y", formatNumber(result.y)],
+      ["Status", result.errors.length ? result.errors.join(" ") : "Ready"],
+    ];
+
+    const outputSheet = spreadsheet.utils.aoa_to_sheet(outputRows);
+    const sheetName = "Calculation Output";
+
+    if (workbook.Sheets[sheetName]) {
+      delete workbook.Sheets[sheetName];
+      workbook.SheetNames = workbook.SheetNames.filter((name) => name !== sheetName);
+    }
+
+    spreadsheet.utils.book_append_sheet(workbook, outputSheet, sheetName);
+    spreadsheet.writeFile(workbook, "iso-vdz-with-calculation.xlsx");
   }
 
   async function copyResults() {
@@ -216,6 +363,37 @@ export default function EngineeringFeedCalculationSystem() {
               subtitle="Enter whole numbers or decimal values with one decimal place."
               icon={Calculator}
             />
+
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-blue-950 dark:bg-slate-900 dark:text-blue-300">
+                  <Table2 className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                    Static Excel Source
+                  </h3>
+                  <p className="mt-1 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                    {excelStatus}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <BrickCodeInput
+                  label="Shape A Code"
+                  value={selectedA}
+                  rows={brickRows}
+                  onChange={(value) => applyBrickRow("A", value)}
+                />
+                <BrickCodeInput
+                  label="Shape B Code"
+                  value={selectedB}
+                  rows={brickRows}
+                  onChange={(value) => applyBrickRow("B", value)}
+                />
+              </div>
+            </div>
 
             <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
               {FEEDS.map((feed) => {
@@ -345,6 +523,13 @@ export default function EngineeringFeedCalculationSystem() {
                     <Download className="h-4 w-4" />
                     PDF
                   </button>
+                  <button
+                    onClick={exportExcelResults}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-blue-950 px-3 text-sm font-black text-white transition hover:bg-blue-900 dark:bg-blue-700 dark:hover:bg-blue-600"
+                  >
+                    <Table2 className="h-4 w-4" />
+                    Excel
+                  </button>
                 </div>
               </div>
 
@@ -378,6 +563,40 @@ function SectionTitle({ title, subtitle, icon: Icon }) {
         <Icon className="h-5 w-5" />
       </div>
     </div>
+  );
+}
+
+function BrickCodeInput({ label, value, rows, onChange }) {
+  const matchedRow = rows.find(
+    (row) => normalizeCode(row.shape) === normalizeCode(value),
+  );
+  const listId = `${label.toLowerCase().replace(/\s+/g, "-")}-options`;
+
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-200">
+        {label}
+      </span>
+      <input
+        type="text"
+        list={listId}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="3K 209"
+        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition focus:border-blue-900 focus:ring-4 focus:ring-blue-100 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:focus:border-blue-500 dark:focus:ring-blue-950"
+      />
+      <datalist id={listId}>
+        {rows.map((row) => (
+          <option key={row.id} value={row.shape} />
+        ))}
+      </datalist>
+      {matchedRow && (
+        <p className="mt-2 text-xs font-bold text-slate-500 dark:text-slate-400">
+          Brick Height {matchedRow.height} | Cold {matchedRow.cold} | Hot{" "}
+          {matchedRow.hot}
+        </p>
+      )}
+    </label>
   );
 }
 
