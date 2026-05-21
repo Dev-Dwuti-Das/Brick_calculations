@@ -30,3 +30,4 @@ Use these settings on common static hosts:
 Netlify SPA fallback is provided by `public/_redirects`.
 Vercel SPA fallback is provided by `vercel.json`.
 # Brick_calculations
+# Brick_calculations
