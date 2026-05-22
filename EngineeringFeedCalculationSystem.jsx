@@ -7,7 +7,6 @@ import {
   Download,
   Factory,
   RefreshCw,
-  Sigma,
   Table2,
 } from "lucide-react";
 
@@ -17,7 +16,7 @@ const FEEDS = [
   { key: "feed3", label: "HotFaceB" },
   { key: "feed4", label: "ColdFaceB" },
   { key: "feed5", label: "Brick Height" },
-  { key: "feed6", label: "Big Dia" },
+  { key: "feed6", label: "Kill Dia" },
 ];
 
 const EMPTY_FEEDS = FEEDS.reduce((values, feed) => {
@@ -29,7 +28,8 @@ const PI_VALUE = 3.14;
 const numericInputPattern = /^-?\d+(\.\d)?$/;
 
 function formatNumber(value) {
-  return Number.isFinite(value) ? value.toFixed(2) : "--";
+  if (!Number.isFinite(value)) return "--";
+  return String(value >= 0 ? Math.floor(value + 0.5) : Math.ceil(value - 0.5));
 }
 
 function parseValue(value) {
@@ -179,7 +179,7 @@ export default function EngineeringFeedCalculationSystem() {
 
     // Solve the corrected 2x2 linear system using Cramer's rule:
     // Feed1 * X + Feed3 * Y = 3.14 * Small Dia
-    // Feed2 * X + Feed4 * Y = 3.14 * Big Dia
+    // Feed2 * X + Feed4 * Y = 3.14 * Kill Dia
     const canSolve =
       !missing.length &&
       !precisionErrors.length &&
@@ -283,13 +283,11 @@ export default function EngineeringFeedCalculationSystem() {
       ["HotFaceB", feeds.feed3],
       ["ColdFaceB", feeds.feed4],
       ["Brick Height", feeds.feed5],
-      ["Big Dia", feeds.feed6],
+      ["Kill Dia", feeds.feed6],
       [],
       ["Calculated Output", "Value"],
-      ["Difference", formatNumber(result.difference)],
-      ["Small Dia", formatNumber(result.smallDia)],
-      ["X", formatNumber(result.x)],
-      ["Y", formatNumber(result.y)],
+      ["A", formatNumber(result.x)],
+      ["B", formatNumber(result.y)],
       ["Status", result.errors.length ? result.errors.join(" ") : "Ready"],
     ];
 
@@ -308,10 +306,8 @@ export default function EngineeringFeedCalculationSystem() {
   async function copyResults() {
     const summary = [
       "Engineering Feed Calculation System",
-      `Difference: ${formatNumber(result.difference)}`,
-      `Small Dia: ${formatNumber(result.smallDia)}`,
-      `X: ${formatNumber(result.x)}`,
-      `Y: ${formatNumber(result.y)}`,
+      `A: ${formatNumber(result.x)}`,
+      `B: ${formatNumber(result.y)}`,
       `HotFaceA × X + HotFaceB × Y RHS: ${formatNumber(result.equation2Right)}`,
       `ColdFaceA × X + ColdFaceB × Y RHS: ${formatNumber(result.equation3Right)}`,
       `Determinant: ${formatNumber(result.determinant)}`,
@@ -324,34 +320,31 @@ export default function EngineeringFeedCalculationSystem() {
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950 antialiased dark:bg-slate-950 dark:text-slate-100">
-      <div className="fixed inset-0 -z-10 bg-[linear-gradient(rgba(15,23,42,0.055)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.055)_1px,transparent_1px)] bg-[size:32px_32px] dark:bg-[linear-gradient(rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.08)_1px,transparent_1px)]" />
+      <div className="screen-only fixed inset-0 -z-10 bg-[linear-gradient(rgba(15,23,42,0.055)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.055)_1px,transparent_1px)] bg-[size:32px_32px] dark:bg-[linear-gradient(rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.08)_1px,transparent_1px)]" />
 
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8">
-        <header className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="border-b border-slate-200 px-5 py-5 dark:border-slate-800">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-950 text-white shadow-sm dark:bg-blue-700">
-                <Factory className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                  Feed Calculation
-                </p>
-                <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl dark:text-white">
-                  Feed Calculation System
-                </h1>
-              </div>
-            </div>
+      <section className="print-only">
+        <h1>Engineering Report</h1>
+        <div className="print-grid">
+          <div>
+            <span>Shape A</span>
+            <strong>{selectedA || "--"}</strong>
           </div>
-
-          <div className="grid gap-px bg-slate-200 dark:bg-slate-800 sm:grid-cols-4">
-            <HeaderStat label="Difference" value={formatNumber(result.difference)} />
-            <HeaderStat label="Small Dia" value={formatNumber(result.smallDia)} />
-            <HeaderStat label="X Value" value={formatNumber(result.x)} />
-            <HeaderStat label="Y Value" value={formatNumber(result.y)} />
+          <div>
+            <span>Shape B</span>
+            <strong>{selectedB || "--"}</strong>
           </div>
-        </header>
+          <div>
+            <span>A Value</span>
+            <strong>{formatNumber(result.x)}</strong>
+          </div>
+          <div>
+            <span>B Value</span>
+            <strong>{formatNumber(result.y)}</strong>
+          </div>
+        </div>
+      </section>
 
+      <div className="screen-only mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8">
         <div className="grid gap-6 lg:grid-cols-[minmax(340px,0.86fr)_1.14fr]">
           <motion.section
             initial={{ opacity: 0, y: 10 }}
@@ -431,6 +424,22 @@ export default function EngineeringFeedCalculationSystem() {
               })}
             </div>
 
+            {visibleErrors.length > 0 && (
+              <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-100">
+                <div className="flex gap-3">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+                  <div>
+                    <h3 className="font-black">System Notice</h3>
+                    <div className="mt-2 space-y-1 text-sm font-medium leading-6">
+                      {visibleErrors.map((error) => (
+                        <p key={error}>{error}</p>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="sticky bottom-0 -mx-5 mt-6 border-t border-slate-200 bg-white/95 p-5 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
               <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
                 <button
@@ -458,53 +467,10 @@ export default function EngineeringFeedCalculationSystem() {
             className="grid gap-6"
           >
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <SectionTitle
-                title="Calculation Model"
-                subtitle="Formula trace and live right-side evaluation."
-                icon={Sigma}
-              />
-
-              <div className="mt-5 grid gap-3">
-                <Equation
-                  label="Equation 1"
-                  formula="Difference = Big Dia - Brick Height"
-                />
-                <Equation
-                  label="Small Dia"
-                  formula="Small Dia = Big Dia - 2 x Brick Height"
-                />
-                <Equation
-                  label="Equation 2"
-                  formula="HotFaceA x X + HotFaceB x Y = 3.14 x Small Dia"
-                />
-                <Equation
-                  label="Equation 3"
-                  formula="ColdFaceA x X + ColdFaceB x Y = 3.14 x Big Dia"
-                />
-              </div>
-
-              {visibleErrors.length > 0 && (
-                <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-100">
-                  <div className="flex gap-3">
-                    <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
-                    <div>
-                      <h3 className="font-black">System Notice</h3>
-                      <div className="mt-2 space-y-1 text-sm font-medium leading-6">
-                        {visibleErrors.map((error) => (
-                          <p key={error}>{error}</p>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <SectionTitle
                   title="Engineering Report"
-                  subtitle="Final calculated outputs rounded to two decimals."
+                  subtitle="Final calculated outputs rounded to the nearest whole number."
                   icon={Factory}
                 />
 
@@ -533,11 +499,9 @@ export default function EngineeringFeedCalculationSystem() {
                 </div>
               </div>
 
-              <div className="mt-5 grid gap-4 sm:grid-cols-4">
-                <Output label="Difference" value={formatNumber(result.difference)} />
-                <Output label="Small Dia" value={formatNumber(result.smallDia)} />
-                <Output label="X Value" value={formatNumber(result.x)} />
-                <Output label="Y Value" value={formatNumber(result.y)} />
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <Output label="A Value" value={formatNumber(result.x)} />
+                <Output label="B Value" value={formatNumber(result.y)} />
               </div>
 
             </div>
@@ -597,35 +561,6 @@ function BrickCodeInput({ label, value, rows, onChange }) {
         </p>
       )}
     </label>
-  );
-}
-
-function HeaderStat({ label, value }) {
-  return (
-    <div className="bg-slate-50 px-5 py-4 dark:bg-slate-950">
-      <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
-        {label}
-      </p>
-      <p className="mt-1 text-2xl font-black text-blue-950 dark:text-blue-300">
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function Equation({ label, formula }) {
-  return (
-    <motion.div
-      whileHover={{ y: -2 }}
-      className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition dark:border-slate-800 dark:bg-slate-950"
-    >
-      <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-        {label}
-      </p>
-      <p className="mt-2 font-mono text-sm font-bold text-slate-800 dark:text-slate-100 sm:text-base">
-        {formula}
-      </p>
-    </motion.div>
   );
 }
 
