@@ -16,7 +16,7 @@ const FEEDS = [
   { key: "feed3", label: "HotFaceB" },
   { key: "feed4", label: "ColdFaceB" },
   { key: "feed5", label: "Brick Height" },
-  { key: "feed6", label: "Kill Dia" },
+  { key: "feed6", label: "Kiln Dia" },
 ];
 
 const EMPTY_FEEDS = FEEDS.reduce((values, feed) => {
@@ -179,7 +179,7 @@ export default function EngineeringFeedCalculationSystem() {
 
     // Solve the corrected 2x2 linear system using Cramer's rule:
     // Feed1 * X + Feed3 * Y = 3.14 * Small Dia
-    // Feed2 * X + Feed4 * Y = 3.14 * Kill Dia
+    // Feed2 * X + Feed4 * Y = 3.14 * Kiln Dia
     const canSolve =
       !missing.length &&
       !precisionErrors.length &&
@@ -283,7 +283,7 @@ export default function EngineeringFeedCalculationSystem() {
       ["HotFaceB", feeds.feed3],
       ["ColdFaceB", feeds.feed4],
       ["Brick Height", feeds.feed5],
-      ["Kill Dia", feeds.feed6],
+      ["Kiln Dia", feeds.feed6],
       [],
       ["Calculated Output", "Value"],
       ["A", formatNumber(result.x)],
